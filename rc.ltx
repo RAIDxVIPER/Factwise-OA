@@ -1,0 +1,196 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage[colorlinks=true,urlcolor=blue!60!black,linkcolor=black]{hyperref}
+
+\newcommand{\degC}{\ensuremath{^{\circ}}C}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+
+\titleformat{\section}{\large\bfseries\color{blue!40!black}}{}{0em}{}[\titlerule]
+\titlespacing*{\section}{0pt}{14pt}{6pt}
+\titleformat{\subsection}{\normalsize\bfseries}{}{0em}{}
+\setlist[itemize]{leftmargin=1.4em,itemsep=2pt,topsep=3pt}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+\renewcommand{\arraystretch}{1.25}
+
+\begin{document}
+
+% ---------------- Title ----------------
+\begin{center}
+  {\LARGE\bfseries Technical Product Manager Assessment}\\[6pt]
+  {\large Ronit Choube \,$\cdot$\, FactWise}\\[2pt]
+  {\normalsize Virus quarantine \& treatment facility app (WardTrack)}
+\end{center}
+
+% ---------------- Q1 ----------------
+\section{Q1) User types and the features relevant to each (Version 1)}
+
+Version 1 solves the three stated problems: nobody knows who has had a temperature taken, doctors visit before temperatures exist, and discharges are late. Everything else is deferred.
+
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{2.6cm} Y Y@{}}
+\toprule
+\textbf{User type} & \textbf{Goal} & \textbf{V1 features and actions} \\
+\midrule
+Nurse &
+Record each patient's temperature once a day, quickly. &
+See the list of patients whose temperature is still due today. Record a temperature (\degC). Correct a mistaken reading from the same day. See critical readings (40.0\,\degC{} or higher) flagged. \\
+\addlinespace
+Doctor &
+Visit every patient once a day after the temperature exists, and decide who can go home. &
+See patients to visit, with today's temperature and the 3-day fever-free count. Mark a visit as done (only after a temperature is recorded). Recommend discharge once the cure criterion is met. Record a death. \\
+\addlinespace
+Admin staff &
+Free beds on time and admit new patients. &
+See the discharge queue. Approve discharge, which frees the bed. Admit a new patient into a free bed. See bed occupancy, temperatures and visits still due. \\
+\addlinespace
+Head doctor (read-only view in V1, uses the Admin screen) &
+Know whether the centre meets the 85\% success benchmark. &
+See success rate against 85\% and the mortality rate against the expected 15\%, with an alert when mortality rises above 15\%. \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+\textbf{Deliberately out of V1 (nice to have):} treatment/medication records, patient login or family access, notifications by SMS, per-doctor workloads, trend charts, multi-site support.
+
+% ---------------- Q2 ----------------
+\section{Q2) Functional prototype}
+
+\textbf{Working prototype link:} \url{https://claude.ai/artifact/UbHu4V1VUKP2PtQD4q2hyx}
+
+The same single-file app can be deployed to Vercel or any static host without a build step. Data in the prototype is demo data held in the browser.
+
+\subsection*{Screens and flow}
+\begin{itemize}
+  \item \textbf{Role switch (top right):} Nurse, Doctor or Admin. Each role shows a different default list and different actions.
+  \item \textbf{Header strip on every screen:} beds occupied (74/74), temperatures done today, doctor visits done today, patients awaiting discharge, plus the treatment success rate against the 85\% benchmark.
+  \item \textbf{Nurse screen:} tab ``Temperature due'' lists patients with no reading today. Type a value and press Record. The row moves to ``Recorded today''. ``Correct reading'' replaces the same-day value.
+  \item \textbf{Doctor screen:} tab ``To visit today''. Mark visited is disabled until the nurse has recorded a temperature. Recommend discharge works only after today's visit and 3 consecutive fever-free days. Record death asks for confirmation.
+  \item \textbf{Admin screen:} tab ``Discharge queue'' with Approve discharge. The Admit patient panel adds a patient when a bed is free. ``Start next day'' is a demo control that moves the clock forward so the 3-day rule can be shown.
+\end{itemize}
+
+\subsection*{Suggested demo path}
+\begin{itemize}
+  \item As Nurse, record a temperature for a patient in ``Temperature due''. Try 45 to see the validation error.
+  \item As Doctor, open ``Cure criterion met'', press Mark visited, then Recommend discharge.
+  \item As Admin, open ``Discharge queue'' and Approve discharge. A bed is freed. Admit a new patient into it.
+  \item Try Admit while all 74 beds are full to see the capacity block.
+\end{itemize}
+
+% ---------------- Q3 ----------------
+\section{Q3) Logical constraints for developers}
+
+These rules are not visible on the screens and must be enforced on the server as well as in the UI.
+
+\subsection{A. Roles and permissions}
+
+\begin{tabularx}{\textwidth}{@{}Y c c c@{}}
+\toprule
+\textbf{Action} & \textbf{Nurse} & \textbf{Doctor} & \textbf{Admin} \\
+\midrule
+Record or correct today's temperature & Yes & No  & No  \\
+Mark doctor visit                     & No  & Yes & No  \\
+Recommend discharge                   & No  & Yes & No  \\
+Approve discharge (frees bed)         & No  & No  & Yes \\
+Record death                          & No  & Yes & No  \\
+Admit patient                         & No  & No  & Yes \\
+View success and mortality rate       & No  & Yes & Yes \\
+\bottomrule
+\end{tabularx}
+
+\medskip
+Unauthorised actions are hidden or disabled in the UI and rejected by the API with a 403.
+
+\subsection{B. Temperature rules}
+\begin{itemize}
+  \item Fever is 38.0\,\degC{} or higher. Store in \degC{} with one decimal place.
+  \item Accept only 34.0 to 42.0\,\degC. Outside that range show ``Enter a temperature between 34.0 and 42.0\,\degC'' and do not save.
+  \item One official reading per patient per calendar day. A second entry is treated as a correction and needs the nurse to press Replace. Keep the old value and the editor's name in an audit log.
+  \item A reading of 40.0\,\degC{} or higher shows a ``critical'' tag and moves the patient to the top of the doctor's list.
+  \item No future-dated readings, and no readings for discharged or deceased patients.
+\end{itemize}
+
+\subsection{C. Doctor visit rules}
+\begin{itemize}
+  \item Mark visited is blocked until today's temperature exists. Show: ``Temperature must be recorded by a nurse before the doctor visit.''
+  \item One visit flag per patient per day. The flag resets at the start of each day.
+  \item Patients with critical or rising temperatures are listed first.
+\end{itemize}
+
+\subsection{D. Discharge rules}
+\begin{itemize}
+  \item A patient is cured after 3 consecutive daily readings, each below 38.0\,\degC. A missing day breaks the streak.
+  \item Recommend discharge is allowed only if: status is Admitted, the doctor visited today, today's reading is below 38.0\,\degC, and the streak is 3 or more. Otherwise show the specific reason (not visited, fever today, or ``Needs 3 consecutive fever-free days. Currently N.'').
+  \item Approve discharge (admin) is allowed only for recommended patients. If a fever is recorded after the recommendation, the recommendation is withdrawn automatically, the nurse sees a message and the doctor is notified.
+  \item Approval frees the bed immediately and counts the patient as a success. The decision cannot be reversed from the UI.
+  \item Discharge is based solely on the 3-day criterion, as set by the head doctor.
+\end{itemize}
+
+\subsection{E. Capacity and admission}
+\begin{itemize}
+  \item Maximum 74 beds. If all are occupied, Admit is blocked with ``All 74 beds occupied. Discharge a patient first.''
+  \item Assign the lowest free bed number. Never assign one bed to two patients (use a database constraint).
+  \item A new patient starts with no readings. Their first temperature is due on the day of admission.
+\end{itemize}
+
+\subsection{F. Death and outcome tracking}
+\begin{itemize}
+  \item Record death needs an explicit confirmation step and frees the bed.
+  \item Success rate $= \dfrac{\text{discharged}}{\text{discharged} + \text{deceased}}$. Benchmark 85\%. When mortality is above 15\%, show the red alert to doctors and admins.
+  \item Show rates only when at least one closed case exists, to avoid dividing by zero.
+\end{itemize}
+
+\subsection{G. Warnings and errors}
+\begin{itemize}
+  \item Show ``Start next day'' warning with the count of patients missing a temperature, so admins know before the day closes.
+  \item Every error says what is wrong and what to do next. Never lose typed data when an error appears.
+  \item Daily end-of-day report: patients with no temperature, patients not visited, patients with 4 or more fever-free days still not discharged.
+  \item All writes are audit-logged with user, role and time.
+\end{itemize}
+
+% ---------------- Q4 ----------------
+\section{Q4) Sprint planning}
+
+\textbf{Capacity.} Velocity is 25 points. Already committed: $3 \text{ stories} \times 5 \text{ points} = 15$. Remaining capacity: 10 points.
+
+\textbf{Value model.} Low $= 1$, Medium $= 3$ (3$\times$ low), High $= 6$ (2$\times$ medium).
+
+\begin{center}
+\begin{tabular}{@{}c l c c r@{}}
+\toprule
+\textbf{Feature} & \textbf{Priority} & \textbf{Value} & \textbf{Effort} & \textbf{Value / effort} \\
+\midrule
+A & High   & 6 & 1   & 6.00  \\
+B & High   & 6 & 3   & 2.00  \\
+C & High   & 6 & 5   & 1.20  \\
+D & Medium & 3 & 2   & 1.50  \\
+E & Medium & 3 & 3   & 1.00  \\
+F & Medium & 3 & 1   & 3.00  \\
+G & Low    & 1 & 0.4 & 2.50  \\
+H & Low    & 1 & 0.5 & 2.00  \\
+I & Low    & 1 & 0.3 & 3.33  \\
+J & Low    & 1 & 0.1 & 10.00 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Method.} This is a knapsack with capacity 10. Taking everything would need 16.3 points of effort (value 31), so 6.3 points must be dropped at the lowest possible value loss. Dropping C (effort 5, value 6) is the cheapest large cut, and one more cut of at least 1.3 effort is needed: D or E (effort 2 or 3, value 3 each). Any other combination loses at least 10 value.
+
+\textbf{Answer:} add A, B, D, F, G, H, I and J. Do not add C or E.
+\begin{itemize}
+  \item Total added effort: $1 + 3 + 2 + 1 + 0.4 + 0.5 + 0.3 + 0.1 = 8.3$ points (within the 10 available).
+  \item Total added value: $6 + 6 + 3 + 3 + 1 + 1 + 1 + 1 = 22$, the maximum achievable.
+  \item Swapping D for E also reaches value 22 but costs 9.3 effort, so D is chosen to keep effort lower.
+  \item Sprint load becomes $15 + 8.3 = 23.3$ points, leaving about 1.7 points of buffer.
+\end{itemize}
+
+\end{document}
